@@ -99,9 +99,10 @@ void handle_window_event(struct SDL_WindowEvent *e)
 	case SDL_WINDOWEVENT_RESIZED:
 	case SDL_WINDOWEVENT_SIZE_CHANGED:
 	case SDL_WINDOWEVENT_MAXIMIZED:
-	case SDL_WINDOWEVENT_RESTORED:
-		gfx_screen_dirty();
-		break;
+    case SDL_WINDOWEVENT_RESTORED:
+      gfx_reload_hd_canvas();
+     gfx_screen_dirty();
+      break;
 	case SDL_WINDOWEVENT_CLOSE:
 		if (gfx_confirm_quit())
 			sys_exit(0);

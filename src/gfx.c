@@ -33,8 +33,11 @@
 #include <unistd.h>
 #include <stdbool.h>
 // --- HIGH RES OVERRIDE BRIDGE ---
+
 char current_loading_filename[256] = "";
 SDL_Texture* hd_canvas = NULL;
+char last_hd_path[512] = "";
+SDL_Rect last_hd_dest_rect = {0};  // ← ADD THIS LINE HERE
 void wipe_hd_canvas(void) {
     if (hd_canvas != NULL) {
         SDL_SetRenderTarget(gfx.renderer, hd_canvas);
@@ -185,7 +188,6 @@ void gfx_window_toggle_fullscreen(void)
     uint32_t flag = SDL_WINDOW_FULLSCREEN_DESKTOP;
     bool fullscreen = SDL_GetWindowFlags(gfx.window) & flag;
 
-    // Destroy hd_canvas BEFORE switching — renderer reset kills it anyway
     if (hd_canvas != NULL) {
         SDL_DestroyTexture(hd_canvas);
         hd_canvas = NULL;
@@ -198,6 +200,22 @@ void gfx_window_toggle_fullscreen(void)
     } else {
         SDL_GetWindowSize(gfx.window, &gfx.window_w, &gfx.window_h);
         SDL_SetWindowFullscreen(gfx.window, flag);
+    }
+
+    if (strlen(last_hd_path) > 0) {
+        SDL_Surface* hd_surface = IMG_Load(last_hd_path);
+        if (hd_surface != NULL) {
+            hd_canvas = SDL_CreateTexture(gfx.renderer, SDL_PIXELFORMAT_RGBA8888,
+                SDL_TEXTUREACCESS_TARGET, 1920, 1200);
+            SDL_SetTextureBlendMode(hd_canvas, SDL_BLENDMODE_BLEND);
+            SDL_Texture* temp_tex = SDL_CreateTextureFromSurface(gfx.renderer, hd_surface);
+            SDL_FreeSurface(hd_surface);
+            SDL_SetRenderTarget(gfx.renderer, hd_canvas);
+            SDL_RenderClear(gfx.renderer);
+            SDL_RenderCopy(gfx.renderer, temp_tex, NULL, &last_hd_dest_rect);
+            SDL_SetRenderTarget(gfx.renderer, NULL);
+            SDL_DestroyTexture(temp_tex);
+        }
     }
 
     gfx_screen_dirty();
@@ -1401,6 +1419,8 @@ snprintf(hd_path, sizeof(hd_path), "hd_assets/%s.png", base_name);
 if (access(hd_path, F_OK) == 0) {
     SDL_Surface* hd_surface = IMG_Load(hd_path);
     if (hd_surface != NULL) {
+        strncpy(last_hd_path, hd_path, 511);
+        last_hd_dest_rect = (SDL_Rect){ cg->metrics.x * 3, cg->metrics.y * 3, cg->metrics.w * 3, cg->metrics.h * 3 };
         if (hd_canvas == NULL) {
             hd_canvas = SDL_CreateTexture(gfx.renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 1920, 1200);
             SDL_SetTextureBlendMode(hd_canvas, SDL_BLENDMODE_BLEND);
