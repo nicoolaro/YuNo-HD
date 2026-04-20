@@ -43,7 +43,7 @@
  * implemented here, as there tends to be subtle differences in the
  * commands between games.
  */
-
+extern char current_loading_filename[256];
 // Helper for System.SaveData functions.
 const char *_sys_save_name_fmt(const char *fmt, unsigned save_no)
 {
@@ -173,13 +173,15 @@ void sys_load_file(struct param_list *params)
 	vm_load_data_file(vm_string_param(params, 0), vm_expr_param(params, 1));
 }
 
+extern char current_loading_filename [256];
+
 void _sys_load_image(const char *name, unsigned i, unsigned x_mult)
 {
+	strncpy(current_loading_filename, name, 255);
+
+    
 	struct archive_data *data = _asset_cg_load(name);
-	if (!data) {
-		WARNING("Failed to load CG \"%s\"", name);
-		return;
-	}
+//...
 
 	// copy CG data into file_data
 	uint32_t off = mem_get_sysvar32(mes_sysvar32_cg_offset);

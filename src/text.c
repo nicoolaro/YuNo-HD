@@ -79,7 +79,7 @@ struct font_spec {
 	unsigned face;
 } font_spec[NR_FONT_TYPES] = {0};
 
-bool text_antialias = false;
+bool text_antialias = true;
 enum text_shadow_type text_shadow = false;
 
 static struct font *font_lookup(int size)
@@ -278,22 +278,78 @@ static void glyph_blit_indexed(SDL_Surface *glyph, int dst_x, int dst_y, SDL_Sur
 	if (SDL_MUSTLOCK(glyph))
 		SDL_UnlockSurface(glyph);
 }
-
+//FONTS WITH CLAUDEEE
 static unsigned gfx_text_draw_glyph_indexed(SDL_Surface *dst, int x, int y, uint32_t ch,
-		SDL_Rect *damage_out)
+                SDL_Rect *damage_out)
 {
-	assert(gfx.text.fg < dst->format->palette->ncolors);
-	SDL_Color fg = dst->format->palette->colors[gfx.text.fg];
-	SDL_Surface *s = TTF_RenderGlyph32_Solid(cur_font->id, ch, fg);
-	if (!s)
-		ERROR("TTF_RenderGlyph32_Solid: %s", TTF_GetError());
+        assert(gfx.text.fg < dst->format->palette->ncolors);
+        SDL_Color fg = dst->format->palette->colors[gfx.text.fg];
+        SDL_Color bg = dst->format->palette->colors[gfx.text.bg];
 
-	y -= cur_font->y_off;
-	unsigned w = s->w;
-	glyph_blit_indexed(s, x, y, dst);
-	*damage_out = (SDL_Rect) { x, y, s->w, s->h };
-	SDL_FreeSurface(s);
-	return w;
+        SDL_Surface *s;
+        if (text_antialias) {
+                s = TTF_RenderGlyph32_Blended(cur_font->id, ch, fg);
+        } else {
+                s = TTF_RenderGlyph32_Solid(cur_font->id, ch, fg);
+        }
+        if (!s)
+                ERROR("TTF_RenderGlyph32_Blended: %s", TTF_GetError());
+
+        y -= cur_font->y_off;
+
+        if (text_antialias) {
+                // Convert blended 32-bit surface to indexed by blending each pixel
+                // against the background palette color
+                SDL_LockSurface(s);
+                SDL_LockSurface(dst);
+                for (int row = 0; row < s->h; row++) {
+                        for (int col = 0; col < s->w; col++) {
+                                int dx = x + col;
+                                int dy = y + row;
+                                if (dx < 0 || dy < 0 || dx >= dst->w || dy >= dst->h)
+                                        continue;
+                                // Read alpha from blended glyph surface
+                                Uint32 *src_px = (Uint32*)((Uint8*)s->pixels + row * s->pitch + col * 4);
+                                Uint8 a = (*src_px >> 24) & 0xFF;
+                                if (a == 0)
+                                        continue;
+                                // Read current dst palette index
+                                Uint8 *dst_px = (Uint8*)dst->pixels + dy * dst->pitch + dx;
+                                SDL_Color cur;
+                                if (a == 255) {
+                                        // Fully opaque — just use fg color
+                                        *dst_px = gfx.text.fg;
+                                } else {
+                                        // Blend fg over current pixel's palette color
+                                        cur = dst->format->palette->colors[*dst_px];
+                                        Uint8 r = (fg.r * a + cur.r * (255 - a)) / 255;
+                                        Uint8 g = (fg.g * a + cur.g * (255 - a)) / 255;
+                                        Uint8 b = (fg.b * a + cur.b * (255 - a)) / 255;
+                                        // Find closest palette color
+                                        int best = 0;
+                                        int best_dist = INT_MAX;
+                                        for (int i = 0; i < dst->format->palette->ncolors; i++) {
+                                                SDL_Color c = dst->format->palette->colors[i];
+                                                int dr = c.r - r, dg = c.g - g, db = c.b - b;
+                                                int dist = dr*dr + dg*dg + db*db;
+                                                if (dist < best_dist) {
+                                                        best_dist = dist;
+                                                        best = i;
+                                                }
+                                        }
+                                        *dst_px = best;
+                                }
+                        }
+                }
+                SDL_UnlockSurface(dst);
+                SDL_UnlockSurface(s);
+        } else {
+                glyph_blit_indexed(s, x, y, dst);
+        }
+
+        *damage_out = (SDL_Rect) { x, y, s->w, s->h };
+        SDL_FreeSurface(s);
+        return s->w;
 }
 
 static unsigned gfx_text_draw_glyph_direct(SDL_Surface *dst, int x, int y, uint32_t ch,
@@ -304,8 +360,8 @@ static unsigned gfx_text_draw_glyph_direct(SDL_Surface *dst, int x, int y, uint3
 		// XXX: Antialiasing can cause issues if the text is rendered to a surface
 		//      filled with the mask color and then copied to the main surface with
 		//      copy_masked (e.g. Doukyuusei does this).
-		outline = TTF_RenderGlyph32_Solid(cur_font->id_outline, ch, gfx.text.bg_color);
-		glyph = TTF_RenderGlyph32_Solid(cur_font->id, ch, gfx.text.fg_color);
+		outline = TTF_RenderGlyph32_Blended(cur_font->id_outline, ch, gfx.text.bg_color);
+		glyph = TTF_RenderGlyph32_Blended(cur_font->id, ch, gfx.text.fg_color);
 	} else {
 		outline = TTF_RenderGlyph32_Blended(cur_font->id_outline, ch, gfx.text.bg_color);
 		glyph = TTF_RenderGlyph32_Blended(cur_font->id, ch, gfx.text.fg_color);
@@ -382,7 +438,8 @@ void ui_draw_text(SDL_Surface *s, int x, int y, const char *text, SDL_Color colo
 	if (!ui_font && !ui_font_init()) {
 		return;
 	}
-	SDL_Surface *text_s = TTF_RenderUTF8_Solid(ui_font, text, color);
+	SDL_Surface *text_s = TTF_RenderUTF8_Blended(ui_font, text, color);
+	SDL_SetSurfaceBlendMode(text_s, SDL_BLENDMODE_BLEND);
 	SDL_Rect text_r = { x, y - (TTF_FontAscent(ui_font) - ui_ascent) - ui_ascent / 2, text_s->w, text_s->h };
 	SDL_CALL(SDL_BlitSurface, text_s, NULL, s, &text_r);
 	SDL_FreeSurface(text_s);

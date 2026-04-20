@@ -1,0 +1,28 @@
+# --- Build System & Compilers ---
+build/
+.ninja_log
+.ninja_deps
+compile_commands.json
+*.exe
+*.o
+*.obj
+*.p/
+
+# --- MSYS2 / MinGW specific ---
+*.stackdump
+*.dll
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS Specific ---
+Thumbs.db
+.DS_Store
+
+# --- Project Specific Assets ---
+# If your hd_assets folder is massive (GBs), uncomment the line below 
+# to keep it off GitHub. If it's small, leave it commented.
+hd_assets/

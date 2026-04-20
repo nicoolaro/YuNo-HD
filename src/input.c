@@ -23,7 +23,9 @@
 #include "input.h"
 #include "gfx_private.h"
 #include "vm.h"
-
+#include <stdlib.h>
+#include "sys.h"
+#include "gfx.h" // Or "gfx_private.h" depending on how the headers are structured
 static uint32_t key_down_timestamp[INPUT_NR_INPUTS] = {0};
 static bool key_down[INPUT_NR_INPUTS] = {0};
 
@@ -111,6 +113,16 @@ void handle_events(void)
 {
 	SDL_Event e;
 	while (SDL_PollEvent(&e)) {
+        
+        // --- POLITE ESCAPE ---
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) {
+            if (gfx_confirm_quit()) {
+                sys_exit(0);
+            }
+        }
+        // ---------------------
+		
+
 		if (game->handle_event && game->handle_event(&e))
 			continue;
 		switch (e.type) {

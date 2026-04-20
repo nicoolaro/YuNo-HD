@@ -29,7 +29,22 @@
 #include "game.h"
 #include "gfx_private.h"
 #include "vm.h"
-
+#include <SDL_image.h>
+#include <unistd.h>
+#include <stdbool.h>
+// --- HIGH RES OVERRIDE BRIDGE ---
+char current_loading_filename[256] = "";
+SDL_Texture* hd_canvas = NULL;
+void wipe_hd_canvas(void) {
+    if (hd_canvas != NULL) {
+        SDL_SetRenderTarget(gfx.renderer, hd_canvas);
+        SDL_SetRenderDrawColor(gfx.renderer, 0, 0, 0, 255);
+        SDL_RenderClear(gfx.renderer);
+        SDL_SetRenderTarget(gfx.renderer, NULL);
+        printf("[HD MOD] Canvas Wiped Clean\n");
+    }
+}
+// --------------------------------
 #define gfx_decode_direct(color) _gfx_decode_direct(color, __func__)
 static inline SDL_Color _gfx_decode_direct(uint32_t color, const char *func)
 {
@@ -353,46 +368,51 @@ void gfx_init(const char *name)
 #ifndef USE_SDL_MIXER
 	SDL_CALL(SDL_InitSubSystem, SDL_INIT_AUDIO);
 #endif
-	SDL_CTOR(SDL_CreateWindow, gfx.window, title,
-			SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, gfx_view.w, gfx_view.h,
-			SDL_WINDOW_RESIZABLE);
+//	SDL_CTOR(SDL_CreateWindow, gfx.window, title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1440, 900, SDL_WINDOW_RESIZABLE);
+//    SDL_CTOR(SDL_CreateWindow, gfx.window, title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    SDL_CTOR(SDL_CreateWindow, gfx.window, title,SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 	gfx.window_id = SDL_GetWindowID(gfx.window);
 	SDL_CTOR(SDL_CreateRenderer, gfx.renderer, gfx.window, -1, 0);
 	SDL_CALL(SDL_SetRenderDrawColor, gfx.renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-	SDL_CALL(SDL_RenderSetLogicalSize, gfx.renderer, gfx_view.w, gfx_view.h);
+	SDL_CALL(SDL_RenderSetLogicalSize, gfx.renderer, 640, 400);
 	gfx_init_window();
 	atexit(gfx_fini);
 }
 
 void gfx_update(void)
 {
-	struct gfx_surface *screen = &gfx.surface[gfx.screen];
-	if (gfx.hidden || !screen->dirty)
-		return;
-	SDL_Rect dst_r = screen->damaged;
-	// XXX: only shuusaku uses this...
-	dst_r.y -= screen->src.y;
-	SDL_CALL(SDL_BlitSurface, screen->s, &screen->damaged, gfx.display, &dst_r);
-	if (gfx.overlay && gfx_overlay_enabled)
-		SDL_CALL(SDL_BlitSurface, gfx.overlay, &screen->damaged, gfx.display, &screen->damaged);
-	if (screen->scaled) {
-		SDL_Rect src = screen->src;
-		SDL_Rect dst = screen->dst;
-		SDL_CALL(SDL_FillRect, gfx.scaled_display, NULL, 0);
-		SDL_CALL(SDL_BlitScaled, gfx.display, &src, gfx.scaled_display, &dst);
-		SDL_CALL(SDL_UpdateTexture, gfx.texture, NULL, gfx.scaled_display->pixels,
-				gfx.scaled_display->pitch);
-	} else {
-		uint8_t *p = gfx.display->pixels + dst_r.y * gfx.display->pitch
-			+ dst_r.x * gfx.display->format->BytesPerPixel;
-		SDL_CALL(SDL_UpdateTexture, gfx.texture, &dst_r, p, gfx.display->pitch);
-	}
-	SDL_CALL(SDL_RenderClear, gfx.renderer);
-	SDL_CALL(SDL_RenderCopy, gfx.renderer, gfx.texture, NULL, NULL);
-	SDL_RenderPresent(gfx.renderer);
-	gfx_clean(gfx.screen);
+struct gfx_surface *screen = &gfx.surface[gfx.screen];
+if (gfx.hidden || !screen->dirty)
+return;
+SDL_Rect dst_r = screen->damaged;
+dst_r.y -= screen->src.y;
+SDL_CALL(SDL_BlitSurface, screen->s, &screen->damaged, gfx.display, &dst_r);
+if (gfx.overlay && gfx_overlay_enabled)
+    SDL_CALL(SDL_BlitSurface, gfx.overlay, &screen->damaged, gfx.display, &screen->damaged);
+if (screen->scaled) {
+    SDL_Rect src = screen->src;
+    SDL_Rect dst = screen->dst;
+    SDL_CALL(SDL_FillRect, gfx.scaled_display, NULL, 0);
+    SDL_CALL(SDL_BlitScaled, gfx.display, &src, gfx.scaled_display, &dst);
 }
 
+SDL_CALL(SDL_RenderClear, gfx.renderer);
+
+if (hd_canvas != NULL) {
+    SDL_CALL(SDL_RenderCopy, gfx.renderer, hd_canvas, NULL, NULL);
+}
+
+SDL_Surface* draw_surface = screen->scaled ? gfx.scaled_display : gfx.display;
+
+SDL_SetColorKey(draw_surface, SDL_TRUE, SDL_MapRGB(draw_surface->format, 0, 0, 0));
+
+SDL_Texture* hd_overlay = SDL_CreateTextureFromSurface(gfx.renderer, draw_surface);
+SDL_CALL(SDL_RenderCopy, gfx.renderer, hd_overlay, NULL, NULL);
+SDL_DestroyTexture(hd_overlay);
+
+SDL_RenderPresent(gfx.renderer);
+gfx_clean(gfx.screen);
+}
 void gfx_display_freeze(void)
 {
 	GFX_LOG("gfx_display_freeze");
@@ -1207,13 +1227,19 @@ static void gfx_direct_fill(int x, int y, int w, int h, SDL_Surface *dst, uint32
 
 void gfx_fill(int x, int y, int w, int h, unsigned i, uint32_t c)
 {
-	GFX_LOG("gfx_fill[%u] %u(%d,%d) @ (%d,%d)", c, i, x, y, w, h);
-	SDL_Surface *dst = gfx_get_surface(i);
-	if (game->bpp == 8)
-		gfx_indexed_fill(x, y, w, h, dst, c);
-	else
-		gfx_direct_fill(x, y, w, h, dst, c);
-	gfx_dirty(i, x, y, w, h);
+if (w >= 500 && h >= 300) {
+wipe_hd_canvas();
+}
+
+    // ... keep the rest of the original function code here ...
+
+SDL_Surface *dst = gfx_get_surface(i);
+if (game->bpp == 8)
+    gfx_indexed_fill(x, y, w, h, dst, (uint8_t)c);
+else
+    gfx_direct_fill(x, y, w, h, dst, c);
+
+gfx_dirty(i, x, y, w, h);
 }
 
 static void gfx_indexed_swap_colors(SDL_Rect r, SDL_Surface *dst, uint8_t c1,
@@ -1345,6 +1371,56 @@ void gfx_draw_cg(unsigned i, struct cg *cg)
 {
 	GFX_LOG("gfx_draw_cg[%u] (%u,%u,%u,%u)", i, cg->metrics.x, cg->metrics.y,
 			cg->metrics.w, cg->metrics.h);
+			
+// --- HD OVERRIDE START ---
+if (strlen(current_loading_filename) > 0) {
+char base_name [ 256 ];
+strncpy(base_name, current_loading_filename, 255);
+base_name [ 255 ] = '\0';
+char *dot = strrchr(base_name, '.');
+if (dot != NULL) { *dot = '\0'; }
+
+char hd_path [ 512 ];
+snprintf(hd_path, sizeof(hd_path), "hd_assets/%s.png", base_name);
+
+if (access(hd_path, F_OK) == 0) {
+    SDL_Surface* hd_surface = IMG_Load(hd_path);
+    if (hd_surface != NULL) {
+        if (hd_canvas == NULL) {
+            hd_canvas = SDL_CreateTexture(gfx.renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, 1920, 1200);
+            SDL_SetTextureBlendMode(hd_canvas, SDL_BLENDMODE_BLEND);
+        }
+        
+        SDL_Texture* temp_tex = SDL_CreateTextureFromSurface(gfx.renderer, hd_surface);
+        SDL_FreeSurface(hd_surface);
+        
+        SDL_SetRenderTarget(gfx.renderer, hd_canvas);
+        
+        if (cg->metrics.w == 640 && cg->metrics.h == 400) {
+            SDL_SetRenderDrawColor(gfx.renderer, 0, 0, 0, 255);
+            SDL_RenderClear(gfx.renderer);
+        }
+        
+        SDL_Rect dest_rect = { cg->metrics.x * 3, cg->metrics.y * 3, cg->metrics.w * 3, cg->metrics.h * 3 };
+        SDL_RenderCopy(gfx.renderer, temp_tex, NULL, &dest_rect);
+        
+        SDL_SetRenderTarget(gfx.renderer, NULL);
+        SDL_DestroyTexture(temp_tex);
+        
+        SDL_Surface *s = gfx_get_surface(i);
+        SDL_Rect fill_rect = { cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h };
+        SDL_FillRect(s, &fill_rect, 0); 
+        gfx_dirty(i, cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h);
+        
+        current_loading_filename [ 0 ] = '\0';
+        return; 
+    }
+}
+}
+current_loading_filename [ 0 ] = '\0';
+// --- HD OVERRIDE END ---
+
+
 	SDL_Surface *s = gfx_get_surface(i);
 	if (SDL_MUSTLOCK(s))
 		SDL_CALL(SDL_LockSurface, s);

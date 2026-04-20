@@ -16,6 +16,7 @@ endif
 libm = meson.get_compiler('c').find_library('m', required: false)
 sdl2 = dependency('sdl2', static : static_libs)
 sdl2_ttf = dependency('SDL2_ttf', static : static_libs)
+sdl2_image = dependency('SDL2_image', static : static_libs) # Add this line
 
 avcodec = dependency('libavcodec', required: false, static : static_libs)
 avformat = dependency('libavformat', required: false, static : static_libs)
@@ -92,7 +93,7 @@ if embed_fonts
   endif
 endif
 
-deps = [libai5_dep, libm, sdl2, sdl2_ttf]
+deps = [libai5_dep, libm, sdl2, sdl2_ttf, sdl2_image]
 if avcodec.found() and avformat.found() and avutil.found() and swscale.found()
   add_project_arguments('-DHAVE_FFMPEG', language : 'c')
   sources += 'src/movie.c'
