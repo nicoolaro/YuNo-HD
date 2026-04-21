@@ -47,4 +47,7 @@ So to summarize where we are:
 🔲 Left/right UI zone black borders
 
 ## Next steps
--
+🔲 Fix Menu background
+🔲 Fix In Game UI border
+🔲 Switch to toggle old vs hd assets
+Modern fonts or improve current
