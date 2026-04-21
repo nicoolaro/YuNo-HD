@@ -218,7 +218,7 @@ void gfx_reload_hd_canvas(void)
         hd_canvas = NULL;
     }
     hd_canvas = SDL_CreateTexture(gfx.renderer, SDL_PIXELFORMAT_RGBA8888,
-      SDL_TEXTUREACCESS_TARGET, 1280, 800);
+      SDL_TEXTUREACCESS_TARGET, 1280, 720);
     SDL_SetTextureBlendMode(hd_canvas, SDL_BLENDMODE_BLEND);
     SDL_SetRenderTarget(gfx.renderer, hd_canvas);
     SDL_SetRenderDrawColor(gfx.renderer, 0, 0, 0, 255);
@@ -452,13 +452,24 @@ void gfx_update(void)
 
     // HD layer: bypass logical scaling so it fills the window natively
     if (hd_canvas != NULL) {
-        SDL_RenderSetLogicalSize(gfx.renderer, 0, 0);
-        int ww, wh;
-        SDL_GetWindowSize(gfx.window, &ww, &wh);
-        SDL_Rect hd_dst = { 0, 0, ww, wh };
-        SDL_RenderCopy(gfx.renderer, hd_canvas, NULL, &hd_dst);
-        SDL_RenderSetLogicalSize(gfx.renderer, 640, 400);
-    }
+SDL_RenderSetLogicalSize(gfx.renderer, 0, 0);
+int ww, wh;
+SDL_GetWindowSize(gfx.window, &ww, &wh);
+int canvas_w = 1280, canvas_h = 720;
+float scale_x = (float)ww / canvas_w;
+float scale_y = (float)wh / canvas_h;
+float scale = scale_x < scale_y ? scale_x : scale_y;
+int dst_w = (int)(canvas_w * scale);
+int dst_h = (int)(canvas_h * scale);
+SDL_Rect hd_dst = {
+    (ww - dst_w) / 2,
+    (wh - dst_h) / 2,
+    dst_w,
+    dst_h
+};
+SDL_RenderCopy(gfx.renderer, hd_canvas, NULL, &hd_dst);
+SDL_RenderSetLogicalSize(gfx.renderer, 640, 400);
+	}
 
     // SD overlay: renders through logical scaling for correct text/UI coords
     SDL_Surface *draw_surface = screen->scaled ? gfx.scaled_display : gfx.display;
@@ -1430,7 +1441,9 @@ void gfx_draw_cg(unsigned i, struct cg *cg)
 			cg->metrics.w, cg->metrics.h);
 			
 // --- HD OVERRIDE START ---
-printf("[HD] metrics x=%d y=%d w=%d h=%d\n", cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h);
+printf("[HD] filename='%s' x=%d y=%d w=%d h=%d\n", 
+    current_loading_filename,
+    cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h);
 if (strlen(current_loading_filename) > 0) {
     char base_name[256];
     strncpy(base_name, current_loading_filename, 255);
@@ -1442,8 +1455,21 @@ if (strlen(current_loading_filename) > 0) {
     snprintf(hd_path, sizeof(hd_path), "hd_assets/%s.png", base_name);
 
     if (access(hd_path, F_OK) == 0) {
-        SDL_Surface *hd_surface = IMG_Load(hd_path);
-        if (hd_surface != NULL) {
+SDL_Surface *hd_surface = IMG_Load(hd_path);
+if (hd_surface != NULL) {
+    if (cg->metrics.w == 640 && cg->metrics.h == 400) {
+        SDL_SetColorKey(hd_surface, SDL_TRUE,
+            SDL_MapRGB(hd_surface->format, 0, 0, 0));
+        SDL_Surface *converted = SDL_ConvertSurfaceFormat(hd_surface, SDL_PIXELFORMAT_RGBA8888, 0);
+        SDL_FreeSurface(hd_surface);
+        hd_surface = converted;
+    }
+	    // ADD THESE TWO LINES:
+        SDL_SetColorKey(hd_surface, SDL_TRUE, SDL_MapRGB(hd_surface->format, 0, 0, 0));
+        SDL_Surface *converted = SDL_ConvertSurfaceFormat(hd_surface, SDL_PIXELFORMAT_RGBA8888, 0);
+        SDL_FreeSurface(hd_surface);
+        hd_surface = converted;
+        // END OF ADDED LINES
             SDL_Rect dest_rect = {
                 cg->metrics.x * 2,
                 cg->metrics.y * 2,
@@ -1460,7 +1486,7 @@ if (strlen(current_loading_filename) > 0) {
 
             if (hd_canvas == NULL) {
                 hd_canvas = SDL_CreateTexture(gfx.renderer, SDL_PIXELFORMAT_RGBA8888,
-                    SDL_TEXTUREACCESS_TARGET, 1280, 800);
+                    SDL_TEXTUREACCESS_TARGET, 1280, 720);
                 SDL_SetTextureBlendMode(hd_canvas, SDL_BLENDMODE_BLEND);
             }
 
