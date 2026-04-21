@@ -1,53 +1,59 @@
-# Ever17-HD
+# YUNO-HD 🌊
 
-Ever17 HD (SDL2 Modernization Project)
-Project Overview
-This project is a technical reverse-engineering effort to modernize the 2002 Japanese visual novel Ever17: The Out of Infinity. The goal is to replace the original 640x480 assets with high-definition upscaled versions (PNG) and ensure compatibility with modern systems and translation layers like Winlator.
+**YU-NO HD** is a technical reverse-engineering project dedicated to modernizing the 2002 Japanese visual novel *YU-NO: A Girl Who Chants Love at the Bound of this World*. 
 
-What We’ve Accomplished So Far
-Engine Hijacking: Successfully intercepted the original SDLC to redirect the game from loading legacy .dat assets to modern PNGs from a local /hd_assets directory.
+The primary objective is to bypass legacy engine limitations, replacing original 640x480 assets with high-definition upscaled PNGs while ensuring flawless compatibility with modern hardware and translation layers like Winlator.
 
-SDL2 Rendering Pipeline: Implemented a new rendering path using SDL_Texture to support hardware acceleration.
+---
 
-Targeted Resolution Support: Optimized the game for 1280x720, making it ideal for handheld play and mobile emulation (Winlator).
+## ✨ Key Features
+*   **HD Texture Injection:** High-fidelity backgrounds rendered without modifying internal game data files.
+*   **Modern Rendering:** Replaced the legacy pipeline with an `SDL_Texture` based path for hardware acceleration.
+*   **Targeted Resolution:** Optimized for 1280x720—perfect for handhelds and mobile emulation.
+*   **Enhanced Input:** Added modern shortcuts, including an `ESC` exit prompt and `F11` fullscreen toggle.
+*   **Portable Design:** Minimal dependencies, optimized for MSYS2/MinGW environments.
 
-Input Management: Added modern shortcuts, including an ESC key exit prompt to prevent accidental closures and a custom F11 toggle.
+## 🛠 Technical Stack
+*   **Language:** C11
+*   **Graphics:** SDL2 (Hardware Accelerated)
+*   **Build System:** Ninja
+*   **Environment:** MSYS2 / MinGW-w64
 
-Build System: Migrated the project to a lightweight, fast Ninja build system with C11 standards.
+---
 
-Next Tasks (Backlog)
-[ ] Fix HD Context Loss: Resolve the issue where the HD layer fails to redraw after a window mode change (F11/Minimize).
+## 📊 Project Status
 
-[ ] Asset Manager Automation: Create a tool to automate the extraction and naming of original frames to match the hd_assets/ structure.
+### Accomplished
+- [x] **Engine Hijacking:** Intercepted SDLC to redirect asset loading from `.dat` to `/hd_assets`.
+- [x] **SDL2 Pipeline:** Full implementation of hardware-accelerated rendering.
+- [x] **Stable Fullscreen:** Borderless windowed mode via `F11`.
+- [x] **HD Canvas Fix:** Resolved context loss issues during window resizing/minimizing.
+- [x] **HD Backgrounds:** Successfully rendering high-resolution assets.
 
-[ ] UI Upscaling: Move beyond background CGs to upscale text boxes and menu elements.
+### Current Focus
+- [ ] **Popup Menu Transparency:** Fixing alpha blending issues in the menu system.
+- [ ] **UI Boundaries:** Addressing black borders in the left/right UI zones.
+- [ ] **Menu Backgrounds:** Implementing HD replacements for system menus.
 
-[ ] Winlator Optimization: Fine-tune the SDL window flags to prevent the "1cm window" bug on Android window managers.
+---
 
-[ ] Logic Decoupling: Clean up src/gfx.c to separate the original engine calls from our HD injection logic.
+## 🗺 Roadmap & Backlog
 
-Features & Goals
-HD Texture Injection: High-fidelity backgrounds without modifying the original game's internal data files.
+### Development
+- [ ] **Logic Decoupling:** Refactor `src/gfx.c` to separate original engine calls from HD injection logic.
+- [ ] **Winlator Optimization:** Fine-tune SDL window flags to fix the "1cm window" bug on Android.
+- [ ] **Toggle System:** Add a real-time switch to toggle between original and HD assets.
 
-Stable Fullscreen: Borderless windowed mode for smooth transitions.
+### Assets & UI
+- [ ] **Asset Manager Automation:** Create a tool to automate extraction/naming of original frames.
+- [ ] **UI Upscaling:** Extend support beyond CGs to text boxes and menu elements.
+- [ ] **Typography:** Implement modern font support or improve current font rendering.
 
-Portable Design: Minimal dependencies, easy to compile on MSYS2/MinGW environments.
+---
 
-## What's done
-So to summarize where we are:
-
-✅ HD backgrounds rendering correctly
-
-✅ F11 fullscreen working
-
-✅ HD canvas context loss fixed
-
-🔲 Popup menu transparency
-
-🔲 Left/right UI zone black borders
-
-## Next steps
-🔲 Fix Menu background
-🔲 Fix In Game UI border
-🔲 Switch to toggle old vs hd assets
-Modern fonts or improve current
+## 🚀 Building
+The project uses the Ninja build system for speed and simplicity.
+```bash
+# Example build command (MSYS2)
+ninja
+```
