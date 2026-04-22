@@ -44,6 +44,32 @@ struct hd_layer {
 static struct hd_layer hd_layers[HD_LAYER_MAX];
 static int hd_layer_count = 0;
 
+enum hd_asset_policy {
+    HD_ASSET_REPLACE,
+    HD_ASSET_REPLACE_KEEP_SD,
+    HD_ASSET_SD_ONLY,
+};
+
+static bool hd_rect_is_full_frame(const SDL_Rect *r)
+{
+    return r->x == 0 && r->y == 0 && r->w == 1280 && r->h == 800;
+}
+
+static enum hd_asset_policy hd_asset_policy_for(const char *base_name, struct cg *cg)
+{
+    if (strcmp(base_name, "mnwaku") == 0 ||
+        strcmp(base_name, "item") == 0 ||
+        strcmp(base_name, "swaku2") == 0)
+        return HD_ASSET_SD_ONLY;
+
+    if (cg->metrics.x == 0 && cg->metrics.y == 0 &&
+        cg->metrics.w == 640 && cg->metrics.h == 400) {
+        return HD_ASSET_REPLACE_KEEP_SD;
+    }
+
+    return HD_ASSET_REPLACE;
+}
+
 void wipe_hd_canvas(void)
 {
     hd_layer_count = 0;
@@ -1304,7 +1330,9 @@ static void gfx_direct_fill(int x, int y, int w, int h, SDL_Surface *dst, uint32
 
 void gfx_fill(int x, int y, int w, int h, unsigned i, uint32_t c)
 {
-    if (w >= 500 && h >= 300) {
+    /* Wipe HD canvas only on a true full-surface clear (640x400 SD = entire frame).
+     * Partial fills during UI layout must not destroy the current scene layers. */
+    if (x == 0 && y == 0 && w >= 640 && h >= 400) {
         wipe_hd_canvas();
     }
     SDL_Surface *dst = gfx_get_surface(i);
@@ -1456,6 +1484,13 @@ if (strlen(current_loading_filename) > 0) {
     char *dot = strrchr(base_name, '.');
     if (dot != NULL) *dot = '\0';
 
+    enum hd_asset_policy policy = hd_asset_policy_for(base_name, cg);
+
+    if (policy == HD_ASSET_SD_ONLY) {
+        current_loading_filename[0] = '\0';
+        goto fallback_sd_draw;
+    }
+
     char hd_path[512];
     snprintf(hd_path, sizeof(hd_path), "hd_assets/%s.png", base_name);
 
@@ -1479,7 +1514,23 @@ if (strlen(current_loading_filename) > 0) {
                 cg->metrics.h * 2
             };
 
-            if (hd_layer_count < HD_LAYER_MAX) {
+            /* Refresh identical assets in place, but allow different files to
+             * share the same rect. Some menu screens are composites made from
+             * multiple full-frame images (for example kanba1 + kanba2), and
+             * same-rect dedup causes the later file to overwrite the earlier one. */
+            int layer_slot = -1;
+            for (int k = 0; k < hd_layer_count; k++) {
+                bool same_path = (strncmp(hd_layers[k].path, hd_path, 511) == 0);
+                if (same_path) {
+                    layer_slot = k;
+                    break;
+                }
+            }
+            if (layer_slot >= 0) {
+                /* Replace existing slot — no count change, order preserved */
+                strncpy(hd_layers[layer_slot].path, hd_path, 511);
+                hd_layers[layer_slot].dest_rect = dest_rect;
+            } else if (hd_layer_count < HD_LAYER_MAX) {
                 strncpy(hd_layers[hd_layer_count].path, hd_path, 511);
                 hd_layers[hd_layer_count].dest_rect = dest_rect;
                 hd_layer_count++;
@@ -1488,8 +1539,8 @@ if (strlen(current_loading_filename) > 0) {
             // sort: full-frame UI assets (1280x800) always render last (on top)
             for (int a = 0; a < hd_layer_count - 1; a++) {
                 for (int b = a + 1; b < hd_layer_count; b++) {
-                    bool a_full = (hd_layers[a].dest_rect.w == 1280 && hd_layers[a].dest_rect.h == 800);
-                    bool b_full = (hd_layers[b].dest_rect.w == 1280 && hd_layers[b].dest_rect.h == 800);
+                    bool a_full = hd_rect_is_full_frame(&hd_layers[a].dest_rect);
+                    bool b_full = hd_rect_is_full_frame(&hd_layers[b].dest_rect);
                     if (a_full && !b_full) {
                         struct hd_layer tmp = hd_layers[a];
                         hd_layers[a] = hd_layers[b];
@@ -1511,7 +1562,7 @@ if (strlen(current_loading_filename) > 0) {
             for (int j = 0; j < hd_layer_count; j++) {
                 SDL_Surface *prev = IMG_Load(hd_layers[j].path);
                 if (prev) {
-                    bool is_full = (hd_layers[j].dest_rect.w == 1280 && hd_layers[j].dest_rect.h == 800);
+                    bool is_full = hd_rect_is_full_frame(&hd_layers[j].dest_rect);
                     if (is_full) {
                         SDL_SetColorKey(prev, SDL_TRUE,
                             SDL_MapRGB(prev->format, 0, 0, 0));
@@ -1528,10 +1579,12 @@ if (strlen(current_loading_filename) > 0) {
             SDL_SetRenderTarget(gfx.renderer, NULL);
 
             SDL_FreeSurface(hd_surface);
-            SDL_Surface *s = gfx_get_surface(i);
-            SDL_Rect fill_rect = { cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h };
-            SDL_FillRect(s, &fill_rect, 0);
-            gfx_dirty(i, cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h);
+            if (policy != HD_ASSET_REPLACE_KEEP_SD) {
+                SDL_Surface *s = gfx_get_surface(i);
+                SDL_Rect fill_rect = { cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h };
+                SDL_FillRect(s, &fill_rect, 0);
+                gfx_dirty(i, cg->metrics.x, cg->metrics.y, cg->metrics.w, cg->metrics.h);
+            }
 
             current_loading_filename[0] = '\0';
             return;
@@ -1540,7 +1593,7 @@ if (strlen(current_loading_filename) > 0) {
 }
 current_loading_filename[0] = '\0';
 // --- HD OVERRIDE END ---
-
+fallback_sd_draw:
 	SDL_Surface *s = gfx_get_surface(i);
 	if (SDL_MUSTLOCK(s))
 		SDL_CALL(SDL_LockSurface, s);
