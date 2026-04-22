@@ -1298,16 +1298,12 @@ void gfx_fill(int x, int y, int w, int h, unsigned i, uint32_t c)
     if (w >= 500 && h >= 300) {
         wipe_hd_canvas();
     }
-
-    // ... keep the rest of the original function code here ...
-
-SDL_Surface *dst = gfx_get_surface(i);
-if (game->bpp == 8)
-    gfx_indexed_fill(x, y, w, h, dst, (uint8_t)c);
-else
-    gfx_direct_fill(x, y, w, h, dst, c);
-
-gfx_dirty(i, x, y, w, h);
+    SDL_Surface *dst = gfx_get_surface(i);
+    if (game->bpp == 8)
+        gfx_indexed_fill(x, y, w, h, dst, (uint8_t)c);
+    else
+        gfx_direct_fill(x, y, w, h, dst, c);
+    gfx_dirty(i, x, y, w, h);
 }
 
 static void gfx_indexed_swap_colors(SDL_Rect r, SDL_Surface *dst, uint8_t c1,
@@ -1455,21 +1451,18 @@ if (strlen(current_loading_filename) > 0) {
     snprintf(hd_path, sizeof(hd_path), "hd_assets/%s.png", base_name);
 
     if (access(hd_path, F_OK) == 0) {
-SDL_Surface *hd_surface = IMG_Load(hd_path);
-if (hd_surface != NULL) {
-    if (cg->metrics.w == 640 && cg->metrics.h == 400) {
-        SDL_SetColorKey(hd_surface, SDL_TRUE,
-            SDL_MapRGB(hd_surface->format, 0, 0, 0));
-        SDL_Surface *converted = SDL_ConvertSurfaceFormat(hd_surface, SDL_PIXELFORMAT_RGBA8888, 0);
-        SDL_FreeSurface(hd_surface);
-        hd_surface = converted;
-    }
-	    // ADD THESE TWO LINES:
-        SDL_SetColorKey(hd_surface, SDL_TRUE, SDL_MapRGB(hd_surface->format, 0, 0, 0));
-        SDL_Surface *converted = SDL_ConvertSurfaceFormat(hd_surface, SDL_PIXELFORMAT_RGBA8888, 0);
-        SDL_FreeSurface(hd_surface);
-        hd_surface = converted;
-        // END OF ADDED LINES
+        SDL_Surface *hd_surface = IMG_Load(hd_path);
+        if (hd_surface != NULL) {
+            // only apply colorkey (black=transparent) for full-frame UI assets
+            if (cg->metrics.w == 640 && cg->metrics.h == 400) {
+                SDL_SetColorKey(hd_surface, SDL_TRUE,
+                    SDL_MapRGB(hd_surface->format, 0, 0, 0));
+                SDL_Surface *converted = SDL_ConvertSurfaceFormat(
+                    hd_surface, SDL_PIXELFORMAT_RGBA8888, 0);
+                SDL_FreeSurface(hd_surface);
+                hd_surface = converted;
+            }
+
             SDL_Rect dest_rect = {
                 cg->metrics.x * 2,
                 cg->metrics.y * 2,
@@ -1477,7 +1470,6 @@ if (hd_surface != NULL) {
                 cg->metrics.h * 2
             };
 
-            // store layer for reload on window events
             if (hd_layer_count < HD_LAYER_MAX) {
                 strncpy(hd_layers[hd_layer_count].path, hd_path, 511);
                 hd_layers[hd_layer_count].dest_rect = dest_rect;
