@@ -16,7 +16,7 @@ endif
 libm = meson.get_compiler('c').find_library('m', required: false)
 sdl2 = dependency('sdl2', static : static_libs)
 sdl2_ttf = dependency('SDL2_ttf', static : static_libs)
-sdl2_image = dependency('SDL2_image', static : static_libs) # Add this line
+sdl2_image = dependency('SDL2_image', static : static_libs) # Add this line it's what allows you to use IMG_Load() in gfx.c to load PNG files for the HD assets. Without it the build wouldn't know about SDL2_image and linking would fail.
 
 avcodec = dependency('libavcodec', required: false, static : static_libs)
 avformat = dependency('libavformat', required: false, static : static_libs)
